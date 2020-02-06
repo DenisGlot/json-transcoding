@@ -1,0 +1,44 @@
+admin:
+  access_log_path: /tmp/admin_access.log
+  address:
+    socket_address: { address: 0.0.0.0, port_value: 9901 }
+static_resources:
+  listeners:
+    - name: listener_0
+      address:
+        socket_address: { address: 0.0.0.0, port_value: 5151 }
+      filter_chains:
+        - filters:
+            - name: envoy.http_connection_manager
+              config:
+                codec_type: auto
+                stat_prefix: grpc_json
+                route_config:
+                  name: local_route
+                  virtual_hosts:
+                    - name: local_service
+                      domains: ["*"]
+                      routes:
+                        - match: { prefix: "/", grpc: {}, query_parameters: [] }
+                          route:
+                            cluster: local_cluster
+                            timeout: { seconds: 60 }
+                http_filters:
+                  - name: envoy.grpc_json_transcoder
+                    config:
+                      proto_descriptor: ${DESCRIPTOR_PATH}
+                      services: [${SERVICES}]
+                      ignore_unknown_query_parameters: true
+                      print_options:
+                        add_whitespace: true
+                        always_print_primitive_fields: true
+                        always_print_enums_as_ints: false
+                        preserve_proto_field_names: false
+                  - name: envoy.router
+  clusters:
+    - name: local_cluster
+      connect_timeout: 2s
+      type: logical_dns
+      http2_protocol_options: {}
+      lb_policy: round_robin
+      hosts: [{ socket_address: { address: "127.0.0.1", port_value: ${APP_PORT} }}]
